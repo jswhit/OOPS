@@ -82,7 +82,7 @@ program fv3gfs_cubic_test
     allocate ( phis(isd:ied  ,jsd:jed ) )
     id_restart = register_restart_field(Fv_restart, filename, 'phis', phis, &
                  domain=domain_cubic)
-! read 2d restart field.
+! read 2d restart field (surface geopotential).
     call restore_state(Fv_restart, id_restart, directory='INPUT')
     print *,'pe,shape,minval,maxval for phis',pe,shape(phis),minval(phis),maxval(phis)
 
@@ -90,7 +90,7 @@ program fv3gfs_cubic_test
     allocate ( pt(isd:ied  ,jsd:jed, nz ) )
     id_restart = register_restart_field(Fv_restart, filename, 'T', pt, &
                  domain=domain_cubic)
-! read 2d restart field.
+! read 3d restart field (potential temperature).
     call restore_state(Fv_restart, id_restart, directory='INPUT')
     print *,'pe,shape,minval,maxval for pt',pe,shape(pt),minval(pt),maxval(pt)
 

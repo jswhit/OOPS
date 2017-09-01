@@ -1,0 +1,19 @@
+&fms_io_nml
+    checksum_required       = F
+&mpp_io_nml
+    header_buffer_val       = 16384,
+    global_field_on_root_pe = T,
+    io_clocks_on            = F,
+    shuffle                 = 0,
+    deflate_level           = -1,
+    cf_compliance           = F
+/
+&fv3gfs_geom_nml
+    size_cubic_grid   = 96,
+    nz                = 64,
+    halo              = 1,
+    stackmax          = 4000000,
+    layout_cubic      = 4,2,
+    layout_latlon     = 4,2,
+    io_layout         = 2,2,
+/

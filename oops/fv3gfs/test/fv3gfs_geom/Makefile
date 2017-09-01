@@ -17,9 +17,10 @@ FMSCPP = -Duse_libMPI -Duse_netCDF
 
 CPPFLAGS = $(FMS_CPP)
 
-SRCS = module_fv3gfs.f90 \
-	   fv3gfs_geom.f90
-OBJS = $(SRCS:.f90=.o)
+SRCS_geom = module_fv3gfs.f90 fv3gfs_geom.f90
+SRCS_fields = module_fv3gfs.f90 fv3gfs_fields.f90
+OBJS_geom = $(SRCS_geom:.f90=.o)
+OBJS_fields = $(SRCS_fields:.f90=.o)
 
 .SUFFIXES: .f90 .F90 .o
 
@@ -31,10 +32,13 @@ OBJS = $(SRCS:.f90=.o)
 
 .PHONY: clean
 
-all: fv3gfs_geom.x
+all: fv3gfs_geom.x fv3gfs_fields.x
 
-fv3gfs_geom.x: $(OBJS)
-	$(FC) $(OBJS) $(CPPFLAGS) $(FCFLAGS) -I. $(FMS_INC) $(NETCDF_INC) -I. -o $@ $(FMS_LIB) $(NETCDF_LIB)
+fv3gfs_geom.x: $(OBJS_geom)
+	$(FC) $(OBJS_geom) $(CPPFLAGS) $(FCFLAGS) -I. $(FMS_INC) $(NETCDF_INC) -I. -o $@ $(FMS_LIB) $(NETCDF_LIB)
+
+fv3gfs_fields.x: $(OBJS_fields)
+	$(FC) $(OBJS_fields) $(CPPFLAGS) $(FCFLAGS) -I. $(FMS_INC) $(NETCDF_INC) -I. -o $@ $(FMS_LIB) $(NETCDF_LIB)
 
 clean:
 	$(RM) *.o *.x *.mod

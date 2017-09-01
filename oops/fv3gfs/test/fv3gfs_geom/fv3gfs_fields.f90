@@ -1,4 +1,4 @@
-program fv3gfs_cubic_test
+program fv3gfs_fields
 
     #include <fms_platform.h>
 
@@ -22,10 +22,66 @@ program fv3gfs_cubic_test
 
     implicit none
 
+    type fv_atmos_type
+
+       logical :: allocated = .false.
+       logical :: hydrostatic = .false.
+
+!-----------------------------------------------------------------------
+! Five prognostic state variables for the f-v dynamics
+!-----------------------------------------------------------------------
+! dyn_state:
+! D-grid prognostatic variables: u, v, and delp (and other scalars)
+!
+!     o--------u(i,j+1)----------o
+!     |           |              |
+!     |           |              |
+!  v(i,j)------scalar(i,j)----v(i+1,j)
+!     |           |              |
+!     |           |              |
+!     o--------u(i,j)------------o
+!
+! The C grid component is "diagnostic" in that it is predicted every time step
+! from the D grid variables.
+      real, allocatable :: u(:,:,:)      ! D grid zonal wind (m/s)
+      real, allocatable :: v(:,:,:)      ! D grid meridional wind (m/s)
+      real, allocatable :: pt(:,:,:)     ! temperature (K)
+      real, allocatable :: delp(:,:,:)   ! pressure thickness (pascal)
+      real, allocatable :: q(:,:,:,:)    ! specific humidity and prognostic constituents
+      real, allocatable :: qdiag(:,:,:,:)    ! diagnostic tracers
+
+!----------------------
+! non-hydrostatic state:
+!----------------------------------------------------------------------
+      real, allocatable ::     w(:,:,:)    ! cell center vertical wind (m/s)
+      real, allocatable ::  delz(:,:,:)    ! layer thickness (meters)
+
+! For phys coupling:
+      real, allocatable :: u_srf(:,:)      ! Surface u-wind
+      real, allocatable :: v_srf(:,:)      ! Surface v-wind
+      real, allocatable :: sgh(:,:)        ! Terrain standard deviation
+      real, allocatable :: oro(:,:)        ! land fraction (1: all land; 0: all water)
+      real, allocatable :: ts(:,:)         ! skin temperature (sst) from NCEP/GFS (K) -- tile
+ 
+!-----------------------------------------------------------------------
+! Others:
+!-----------------------------------------------------------------------
+      real, allocatable :: phis(:,:)       ! Surface geopotential (g*Z_surf)
+      real, allocatable :: omga(:,:,:)     ! Vertical pressure velocity (pa/s)
+      real, allocatable :: ua(:,:,:)       ! (ua, va) are mostly used as the A grid winds
+      real, allocatable :: va(:,:,:)     
+
+      real, allocatable :: ak(:)  
+      real, allocatable :: bk(:)  
+
+    end type fv_atmos_type
+
     integer :: sizex_latlon_grid = 144
     integer :: sizey_latlon_grid = 90
     integer :: size_cubic_grid = 48
     integer :: nz = 10
+    integer :: nq = 3
+    logical :: hydrostatic = .false.
     integer :: halo = 1
     integer :: stackmax = 4000000
     integer :: layout_cubic(2)  = (/4,2/)
@@ -33,16 +89,15 @@ program fv3gfs_cubic_test
     integer :: io_layout(2) = (/1,1/) ! set ndivs_x and ndivs_y to divide each tile into io_layout(1)*io_layout(2)
                                       ! group and write out data from the root pe of each group.
     namelist /fv3gfs_geom_nml/ sizex_latlon_grid, sizey_latlon_grid, size_cubic_grid, &
-                               nz, halo, stackmax, layout_cubic, layout_latlon, io_layout
+                               nq, nz, hydrostatic, halo, stackmax, layout_cubic, layout_latlon, io_layout
 
     type(domain2D), save :: domain_cubic
     type(restart_file_type) :: Fv_restart
+    type(fv_atmos_type) :: Atm
     character(len=64)    :: filename
     integer, parameter :: ntile_cubic = 6
     integer :: pe, npes, isc, isd, iec, ied, jsc, jsd, jec, jed, id_restart
     integer :: nmlunit, outunit, io_status
-    real, allocatable, dimension(:,:) :: phis
-    real, allocatable, dimension(:,:,:) :: pt
 
 ! initialization.
     call mpp_init
@@ -77,26 +132,81 @@ program fv3gfs_cubic_test
     print *,pe,'compute domain',isc, iec, jsc, jec
     print *,pe,'data domain',isd, ied, jsd, jed
 
+! allocate fv_atmos structure.
+    call allocate_fv_atmos_type(Atm, isd, ied, jsd, jed, isc, iec, jsc, jec, nz, nq, hydrostatic)
+
 ! register 2d restart field.
     filename = 'fv_core.res.nc'
-    allocate ( phis(isd:ied  ,jsd:jed ) )
-    id_restart = register_restart_field(Fv_restart, filename, 'phis', phis, &
+    id_restart = register_restart_field(Fv_restart, filename, 'phis', Atm%phis, &
                  domain=domain_cubic)
 ! read 2d restart field (surface geopotential).
     call restore_state(Fv_restart, id_restart, directory='INPUT')
-    print *,'pe,shape,minval,maxval for phis',pe,shape(phis),minval(phis),maxval(phis)
+    print *,'pe,shape,minval,maxval for phis',pe,shape(Atm%phis),minval(Atm%phis),maxval(Atm%phis)
 
 ! register 3d restart field.
-    allocate ( pt(isd:ied  ,jsd:jed, nz ) )
-    id_restart = register_restart_field(Fv_restart, filename, 'T', pt, &
+    id_restart = register_restart_field(Fv_restart, filename, 'T', Atm%pt, &
                  domain=domain_cubic)
 ! read 3d restart field (potential temperature).
     call restore_state(Fv_restart, id_restart, directory='INPUT')
-    print *,'pe,shape,minval,maxval for pt',pe,shape(pt),minval(pt),maxval(pt)
+    print *,'pe,shape,minval,maxval for pt',pe,shape(Atm%pt),minval(Atm%pt),maxval(Atm%pt)
 
 ! clean up and exit.
     call fms_io_exit
     call mpp_domains_exit
     call mpp_exit
 
-end program fv3gfs_cubic_test
+contains
+
+  subroutine allocate_fv_atmos_type(Atm, isd, ied, jsd, jed, isc, iec, jsc, jec, &
+                                    nz, nq, hydrostatic)
+
+    !WARNING: Before calling this routine, be sure to have set up the
+    ! proper domain parameters.
+
+    implicit none
+    type(fv_atmos_type), intent(INOUT), target :: Atm
+    logical, intent(IN) :: hydrostatic
+    integer, intent(IN) :: isd, ied, jsd, jed, isc, iec, jsc, jec, nz, nq
+
+    Atm%hydrostatic = hydrostatic
+
+    if (Atm%allocated) return
+
+    allocate (    Atm%u(isd:ied  ,jsd:jed+1,nz) )
+    allocate (    Atm%v(isd:ied+1,jsd:jed  ,nz) )
+
+    allocate (   Atm%pt(isd:ied  ,jsd:jed  ,nz) )
+    allocate ( Atm%delp(isd:ied  ,jsd:jed  ,nz) )
+    allocate (    Atm%q(isd:ied  ,jsd:jed  ,nz, nq) )
+
+    allocate ( Atm%u_srf(isc:iec,jsc:jec) )
+    allocate ( Atm%v_srf(isc:iec,jsc:jec) )
+
+    allocate ( Atm%sgh(isc:iec,jsc:jec) )
+    allocate ( Atm%oro(isc:iec,jsc:jec) )
+
+    ! Allocate others
+    allocate ( Atm%ts(isc:iec,jsc:jec) )
+    allocate ( Atm%phis(isd:ied  ,jsd:jed  ) )
+    allocate ( Atm%omga(isd:ied  ,jsd:jed  ,nz) )
+    allocate ( Atm%ua(isd:ied  ,jsd:jed  ,nz) )
+    allocate ( Atm%va(isd:ied  ,jsd:jed  ,nz) )
+
+    allocate ( Atm%ak(nz+1) )
+    allocate ( Atm%bk(nz+1) )
+
+    !--------------------------
+    ! Non-hydrostatic dynamics:
+    !--------------------------
+    if ( Atm%hydrostatic ) then
+       !Note length-one initialization if hydrostatic = .true.
+       allocate (    Atm%w(isd:isd, jsd:jsd  ,1) )
+       allocate ( Atm%delz(isd:isd, jsd:jsd  ,1) )
+    else
+       allocate (    Atm%w(isd:ied, jsd:jed  ,nz  ) )
+       allocate ( Atm%delz(isd:ied, jsd:jed  ,nz) )
+    endif
+
+  end subroutine allocate_fv_atmos_type
+
+end program fv3gfs_fields

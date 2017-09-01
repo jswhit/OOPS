@@ -22,14 +22,18 @@ program fv3gfs_cubic_test
 
     implicit none
 
+    integer :: sizex_latlon_grid = 144
+    integer :: sizey_latlon_grid = 90
     integer :: size_cubic_grid = 48
     integer :: nz = 10
     integer :: halo = 1
     integer :: stackmax = 4000000
     integer :: layout_cubic(2)  = (/4,2/)
+    integer :: layout_latlon(2) = (/4,2/)
     integer :: io_layout(2) = (/1,1/) ! set ndivs_x and ndivs_y to divide each tile into io_layout(1)*io_layout(2)
-    namelist /fv3gfs_geom_nml/ size_cubic_grid, &
-                               nz, halo, stackmax, layout_cubic, io_layout
+                                      ! group and write out data from the root pe of each group.
+    namelist /fv3gfs_geom_nml/ sizex_latlon_grid, sizey_latlon_grid, size_cubic_grid, &
+                               nz, halo, stackmax, layout_cubic, layout_latlon, io_layout
 
     type(domain2D), save :: domain_cubic
     type(restart_file_type) :: Fv_restart
@@ -38,6 +42,7 @@ program fv3gfs_cubic_test
     integer :: pe, npes, isc, isd, iec, ied, jsc, jsd, jec, jed, id_restart
     integer :: nmlunit, outunit, io_status
     real, allocatable, dimension(:,:) :: phis
+    real, allocatable, dimension(:,:,:) :: pt
 
 ! initialization.
     call mpp_init
@@ -48,8 +53,8 @@ program fv3gfs_cubic_test
     npes = mpp_npes()
 
 ! read namelist.
-    if (file_exist('input2.nml') )then
-       call mpp_open(nmlunit, 'input2.nml', form=MPP_ASCII, action=MPP_RDONLY)
+    if (file_exist('input.nml') )then
+       call mpp_open(nmlunit, 'input.nml', form=MPP_ASCII, action=MPP_RDONLY)
        read(nmlunit,fv3gfs_geom_nml,iostat=io_status)
        call mpp_close(nmlunit)
     endif
@@ -72,15 +77,22 @@ program fv3gfs_cubic_test
     print *,pe,'compute domain',isc, iec, jsc, jec
     print *,pe,'data domain',isd, ied, jsd, jed
 
-! register restart fields.
+! register 2d restart field.
     filename = 'fv_core.res.nc'
     allocate ( phis(isd:ied  ,jsd:jed ) )
     id_restart = register_restart_field(Fv_restart, filename, 'phis', phis, &
                  domain=domain_cubic)
-
-! read restart fields.
+! read 2d restart field.
     call restore_state(Fv_restart, id_restart, directory='INPUT')
     print *,'pe,shape,minval,maxval for phis',pe,shape(phis),minval(phis),maxval(phis)
+
+! register 3d restart field.
+    allocate ( pt(isd:ied  ,jsd:jed, nz ) )
+    id_restart = register_restart_field(Fv_restart, filename, 'T', pt, &
+                 domain=domain_cubic)
+! read 2d restart field.
+    call restore_state(Fv_restart, id_restart, directory='INPUT')
+    print *,'pe,shape,minval,maxval for pt',pe,shape(pt),minval(pt),maxval(pt)
 
 ! clean up and exit.
     call fms_io_exit

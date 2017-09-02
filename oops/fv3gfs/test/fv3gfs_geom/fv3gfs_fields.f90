@@ -213,6 +213,9 @@ contains
 
     if (Atm%allocated) return
 
+! what is the difference between compute and data domains (ied,jed vs iec,jec)?
+! why is data domain used here?
+
     allocate (    Atm%u(isd:ied  ,jsd:jed+1,nz) )
     allocate (    Atm%v(isd:ied+1,jsd:jed  ,nz) )
     allocate (   Atm%pt(isd:ied  ,jsd:jed  ,nz) )

@@ -131,64 +131,57 @@ program fv3gfs_fields
     call allocate_fv_atmos_type(Atm, isd, ied, jsd, jed, isc, iec, jsc, jec, nz, nq, &
                                 hydrostatic, agrid_vel_rst)
 
-! read restart fields from fv_core.
+! register restart fields.
     filename = 'fv_core.res.nc'
     id_restart = register_restart_field(Fv_restart, filename, 'ak', Atm%ak(:), no_domain=.true.)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
     id_restart = register_restart_field(Fv_restart, filename, 'bk', Atm%bk(:), no_domain=.true.)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
+    ! read ak,bk
+    call restore_state(Fv_restart, directory='INPUT')
     call free_restart_type(Fv_restart)
-    if (pe == 0) print *,'ak=',Atm%ak
-    if (pe == 0) print *,'bk=',Atm%bk
-    id_restart = register_restart_field(Fv_restart, filename, 'phis', Atm%phis, &
-                 domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
-    print *,'pe,shape,minval,maxval for phis',pe,shape(Atm%phis),minval(Atm%phis),maxval(Atm%phis)
-    id_restart = register_restart_field(Fv_restart, filename, 'T', Atm%pt, &
-                 domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
-    print *,'pe,shape,minval,maxval for pt',pe,shape(Atm%pt),minval(Atm%pt),maxval(Atm%pt)
 ! FIXME:  u and v don't work, get this error
 !FATAL from PE     2: fms_io(setup_one_field): data should be on either compute
 !domain or data domain when domain is present for field u of file fv_core.res.nc
 !   id_restart = register_restart_field(Fv_restart, filename, 'u', Atm%u, &
 !                domain=domain_cubic,position=NORTH)
-!   call restore_state(Fv_restart, id_restart, directory='INPUT')
 !   id_restart = register_restart_field(Fv_restart, filename, 'v', Atm%v, &
 !                domain=domain_cubic,position=EAST)
-!   call restore_state(Fv_restart, id_restart, directory='INPUT')
+    id_restart = register_restart_field(Fv_restart, filename, 'phis', Atm%phis, &
+                 domain=domain_cubic)
+    id_restart = register_restart_field(Fv_restart, filename, 'T', Atm%pt, &
+                 domain=domain_cubic)
     id_restart = register_restart_field(Fv_restart, filename, 'DELP', Atm%delp, &
                  domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
     if (Atm%agrid_vel_rst) then
         id_restart =  register_restart_field(Fv_restart, filename, 'ua', Atm%ua, &
                       domain=domain_cubic)
-        call restore_state(Fv_restart, id_restart, directory='INPUT')
         id_restart =  register_restart_field(Fv_restart, filename, 'va', Atm%va, &
                       domain=domain_cubic)
-        call restore_state(Fv_restart, id_restart, directory='INPUT')
     endif
     if (.not. Atm%hydrostatic) then
         id_restart =  register_restart_field(Fv_restart, filename, 'W', Atm%w, &
                       domain=domain_cubic)
-        call restore_state(Fv_restart, id_restart, directory='INPUT')
         id_restart =  register_restart_field(Fv_restart, filename, 'DZ', Atm%delz, &
                       domain=domain_cubic)
-        call restore_state(Fv_restart, id_restart, directory='INPUT')
     endif
+! read core fields.
+    call restore_state(Fv_restart, directory='INPUT')
 
-! read tracers (should use field_table for this).
+! register tracers (should use field_table for this).
     call free_restart_type(Fv_restart)
     filename = 'fv_tracer.res.nc'
     id_restart = register_restart_field(Fv_restart, filename, 'sphum', Atm%q(:,:,:,1), &
                  domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
     id_restart = register_restart_field(Fv_restart, filename, 'o3mr', Atm%q(:,:,:,2), &
                  domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
     id_restart = register_restart_field(Fv_restart, filename, 'liq_wat', Atm%q(:,:,:,3), &
                  domain=domain_cubic)
-    call restore_state(Fv_restart, id_restart, directory='INPUT')
+! read tracer fields.
+    call restore_state(Fv_restart, directory='INPUT')
+
+    if (pe == 0) print *,'ak=',Atm%ak
+    if (pe == 0) print *,'bk=',Atm%bk
+    print *,'pe,shape,minval,maxval for phis',pe,shape(Atm%phis),minval(Atm%phis),maxval(Atm%phis)
+    print *,'pe,shape,minval,maxval for pt',pe,shape(Atm%pt),minval(Atm%pt),maxval(Atm%pt)
 
 ! clean up and exit.
     call fms_io_exit

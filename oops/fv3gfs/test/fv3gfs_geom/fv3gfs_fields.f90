@@ -6,7 +6,7 @@ program fv3gfs_fields
     use mpp_mod,         only: stdout, mpp_error, FATAL, NOTE
     use mpp_mod,         only: input_nml_file
     use mpp_domains_mod, only: domain2d, EAST, WEST, NORTH, CENTER, SOUTH,&
-                               CORNER
+                               CORNER, DGRID_NE, mpp_update_domains
     use mpp_domains_mod, only: mpp_domains_init, mpp_domains_exit
     use mpp_domains_mod, only: mpp_domains_set_stack_size
     use mpp_domains_mod, only: mpp_get_compute_domain, mpp_get_data_domain
@@ -130,6 +130,7 @@ program fv3gfs_fields
 ! allocate fv_atmos structure.
     call allocate_fv_atmos_type(Atm, isd, ied, jsd, jed, isc, iec, jsc, jec, nz, nq, &
                                 hydrostatic, agrid_vel_rst)
+    !call mpp_update_domains(Atm%u, Atm%v, domain_cubic, gridtype=DGRID_NE, complete=.true.)
 
 ! register restart fields.
     filename = 'fv_core.res.nc'
@@ -138,13 +139,10 @@ program fv3gfs_fields
     ! read ak,bk
     call restore_state(Fv_restart, directory='INPUT')
     call free_restart_type(Fv_restart)
-! FIXME:  u and v don't work, get this error
-!FATAL from PE     2: fms_io(setup_one_field): data should be on either compute
-!domain or data domain when domain is present for field u of file fv_core.res.nc
-!   id_restart = register_restart_field(Fv_restart, filename, 'u', Atm%u, &
-!                domain=domain_cubic,position=NORTH)
-!   id_restart = register_restart_field(Fv_restart, filename, 'v', Atm%v, &
-!                domain=domain_cubic,position=EAST)
+    id_restart = register_restart_field(Fv_restart, filename, 'u', Atm%u, &
+                 domain=domain_cubic,position=NORTH)
+    id_restart = register_restart_field(Fv_restart, filename, 'v', Atm%v, &
+                 domain=domain_cubic,position=EAST)
     id_restart = register_restart_field(Fv_restart, filename, 'phis', Atm%phis, &
                  domain=domain_cubic)
     id_restart = register_restart_field(Fv_restart, filename, 'T', Atm%pt, &
@@ -182,6 +180,7 @@ program fv3gfs_fields
     if (pe == 0) print *,'bk=',Atm%bk
     print *,'pe,shape,minval,maxval for phis',pe,shape(Atm%phis),minval(Atm%phis),maxval(Atm%phis)
     print *,'pe,shape,minval,maxval for pt',pe,shape(Atm%pt),minval(Atm%pt),maxval(Atm%pt)
+    print *,'pe,shape,minval,maxval for u',pe,shape(Atm%u),minval(Atm%u),maxval(Atm%u)
 
 ! clean up and exit.
     call fms_io_exit

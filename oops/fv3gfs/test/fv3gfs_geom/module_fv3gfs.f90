@@ -75,6 +75,7 @@ subroutine setup_geom(domain, gtype, nx, ny, ntiles, layout_in, io_layout_in, ha
        pe_end(n)           = n*npes_per_tile-1
     enddo
 
+    ! this code copied from domain_decomp in fv_mp_mod.f90
     if (gtype == 'cubic_grid') then
         num_contact = 12
         allocate(tile1(num_contact), tile2(num_contact) )
